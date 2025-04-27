@@ -4,15 +4,15 @@ channels:
   - pytorch
   - defaults
 dependencies:
-  - python=3.10
+  - python=3.9
   - pytorch
   - torchvision
   - torchaudio
   - cpuonly
-  - fenics
+  - numpy
+  - fenics=2019.1.0
   - meshio
   - matplotlib
-  - numpy
   - scipy
   - plotly
   - tqdm
@@ -25,5 +25,4 @@ dependencies:
   - pytest-cov
   - pip
   - pip:
-    - fenics-ufl 
     - meshpy
