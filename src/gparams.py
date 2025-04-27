@@ -400,27 +400,19 @@ def validation_train(params):
    if ntrainings == 1:
       training_seed = [params['training_seed']]
       maxits_adam = [params['maxits_adam']]
-      maxits_lbfgs = [params['maxits_lbfgs']]
       data_update_freq = [params['data_update_freq']]
       plot_loss_freq = [params['plot_loss_freq']]
       adam_lr = [params['adam_lr']]
       adam_lr_stepsize = [params['adam_lr_stepsize']]
       adam_lr_gamma = [params['adam_lr_gamma']]
-      lbfgs_lr = [params['lbfgs_lr']]
-      lbfgs_lr_stepsize = [params['lbfgs_lr_stepsize']]
-      lbfgs_lr_gamma = [params['lbfgs_lr_gamma']]
    else:
       training_seed = params['training_seed']
       maxits_adam = params['maxits_adam']
-      maxits_lbfgs = params['maxits_lbfgs']
       data_update_freq = params['data_update_freq']
       plot_loss_freq = params['plot_loss_freq']
       adam_lr = params['adam_lr']
       adam_lr_stepsize = params['adam_lr_stepsize']
       adam_lr_gamma = params['adam_lr_gamma']
-      lbfgs_lr = params['lbfgs_lr']
-      lbfgs_lr_stepsize = params['lbfgs_lr_stepsize']
-      lbfgs_lr_gamma = params['lbfgs_lr_gamma']
    loss_history_file_base_list = []
    fig_file_base_list = []
    if ntrainings == 1:
@@ -442,15 +434,11 @@ def validation_train(params):
                               models_inuse = models_inuse[i],
                               weights = models_weights[i],
                               maxits_adam = maxits_adam[i],
-                              maxits_lbfgs = maxits_lbfgs[i],
                               data_update_freq = data_update_freq[i],
                               print_loss_freq = plot_loss_freq[i],
                               lr_adam_init = adam_lr[i],
                               lr_adam_stepsize = adam_lr_stepsize[i],
                               lr_adam_gamma = adam_lr_gamma[i],
-                              lr_lbfgs_init = lbfgs_lr[i],
-                              lr_lbfgs_stepsize = lbfgs_lr_stepsize[i],
-                              lr_lbfgs_gamma = lbfgs_lr_gamma[i],
                               loss_history_file_base = loss_history_file_base_list[i],
                               save_figs = params['save_figs'],
                               fig_file_base = fig_file_base_list[i],
@@ -466,15 +454,11 @@ def validation_train(params):
                                     models_inuse = models_inuse[i],
                                     weights = models_weights[i],
                                     maxits_adam = maxits_adam[i],
-                                    maxits_lbfgs = maxits_lbfgs[i],
                                     data_update_freq = data_update_freq[i],
                                     print_loss_freq = plot_loss_freq[i],
                                     lr_adam_init = adam_lr[i],
                                     lr_adam_stepsize = adam_lr_stepsize[i],
                                     lr_adam_gamma = adam_lr_gamma[i],
-                                    lr_lbfgs_init = lbfgs_lr[i],
-                                    lr_lbfgs_stepsize = lbfgs_lr_stepsize[i],
-                                    lr_lbfgs_gamma = lbfgs_lr_gamma[i],
                                     loss_history_file_base = loss_history_file_base_list[i],
                                     save_figs = params['save_figs'],
                                     fig_file_base = fig_file_base_list[i],
@@ -1155,7 +1139,50 @@ def plot_1dgreen_fem(params, err_max = 0.0, refine_level = 1, fem_only = False):
                plt.show()
             plt.close()
    return params
-   
+
+def plot_1dgreen_nofem(params):
+   '''
+   Generate Green's function using our model.
+   '''
+   if params['dim'] == 1:
+      # run FEM for each y value! This can be expensive
+      ntotal = params['domain']._quad_points.shape[0]
+      repeat_x = params['domain']._quad_points.repeat_interleave(ntotal)
+      repeat_y = params['domain']._quad_points.repeat(ntotal)
+      x = torch.vstack([repeat_x, repeat_y]).T
+      
+      params['G_pred_plot'] = np.zeros((ntotal,ntotal)).astype(params['dtype_np'])
+
+      for domi in range(params['domain']._ndomains):
+         idx = np.where(params['domain']._quad_domain.detach().cpu().numpy() == domi)[0]
+         ndomi = idx.shape[0]
+         xi = torch.vstack([params['domain']._quad_points.repeat_interleave(ndomi),
+                           params['domain']._quad_points[idx].repeat(ntotal)]).T
+         params['G_pred_plot'][idx,:] = params['model'].eval(xi, domain_num=domi).detach().cpu().numpy().squeeze().reshape((ndomi, ntotal), order='F')
+         if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+      
+      fig, axs = plt.subplots(1, 1, figsize=(5, 5), facecolor='w', edgecolor='k')
+      fig.subplots_adjust(hspace = .2, wspace=.2)
+      im = axs.imshow(params['G_pred_plot'], cmap='jet')
+      axs.set_title('Prediction')
+      axs.set_ylim(axs.get_ylim()[::-1])
+      axs.axis('off')
+      fig.colorbar(im, ax=axs)
+      if params['save_figs']:
+         figname = params['fig_file_base'] + '_green_pred.png'
+         plt.savefig(figname)
+         npzname = params['fig_file_base'] + '_green_pred.npz'
+         np.savez(npzname, x=params['domain']._quad_points.detach().cpu().numpy(), 
+                           G_pred=params['G_pred_plot'])
+         # Also save G_pred_plot to matlab .mat file
+         import scipy.io
+         scipy.io.savemat(params['fig_file_base'] + '_green_pred.mat', {'G_pred': params['G_pred_plot']})
+      else:
+         plt.show()
+      plt.close()
+   return params
+
 def validation_eval(params):
    if params['dim'] == 1:
       nquad = params['domain']._quad_points.shape[0]
@@ -1174,7 +1201,7 @@ def validation_eval(params):
          ndomi = idx.shape[0]
          xi = torch.vstack([params['domain']._quad_mesh_points.repeat_interleave(ndomi),
                            params['domain']._quad_points[idx].repeat(ngrid)]).T
-         params['G_pred'][idx,:] = params['model'].eval(xi, domain_num=domi, all_inuse = True).detach().cpu().numpy().squeeze().reshape((ndomi, ngrid), order='F')
+         params['G_pred'][idx,:] = params['model'].eval(xi, domain_num=domi).detach().cpu().numpy().squeeze().reshape((ndomi, ngrid), order='F')
          if torch.cuda.is_available():
             torch.cuda.empty_cache()
    elif params['dim'] == 2:
@@ -1195,7 +1222,7 @@ def validation_eval(params):
             ndomi = idx.shape[0]
             xi = torch.hstack([params['domain']._quad_mesh_points.repeat_interleave(ndomi,dim=0),
                               params['domain']._quad_points[idx,:].repeat(ngrid,1)])
-            params['G_pred'][idx,:] = params['model'].eval(xi, domain_num=domi, all_inuse = True).detach().cpu().numpy().squeeze().reshape((ndomi, ngrid), order='F')
+            params['G_pred'][idx,:] = params['model'].eval(xi, domain_num=domi).detach().cpu().numpy().squeeze().reshape((ndomi, ngrid), order='F')
             if torch.cuda.is_available():
                torch.cuda.empty_cache()
          return params
@@ -1328,20 +1355,21 @@ def validation_solve(params, rhs_func, rhs_fenics = None, test_name = "", refine
          if sol_fem is not None:
             vmin = min(sol.min(), sol_fem.min())
             vmax = max(sol.max(), sol_fem.max())
+            levels = np.linspace(vmin, vmax, 64)
             fig = plt.figure(figsize=(15,5))
             ax = fig.add_subplot(131)
-            im = ax.tricontourf(params['tri'], sol_fem, cmap='jet', vmin=vmin, vmax=vmax)
+            im = ax.tricontourf(params['tri'], sol_fem, levels = levels, cmap='jet', vmin=vmin, vmax=vmax)
             ax.set_title('FEM solution')
             fig.colorbar(im, ax=ax)
             ax.set_aspect('equal', adjustable='box')
             ax = fig.add_subplot(132)
-            im = ax.tricontourf(params['tri'], sol, cmap='jet', vmin=vmin, vmax=vmax)
+            im = ax.tricontourf(params['tri'], sol, levels = levels, cmap='jet', vmin=vmin, vmax=vmax)
             ax.set_title('Predicted solution')
             fig.colorbar(im, ax=ax)
             ax.set_aspect('equal', adjustable='box')
             ax = fig.add_subplot(133)
-            im = ax.tricontourf(params['tri'], sol-sol_fem, cmap='jet')
-            ax.set_title('Diff')
+            im = ax.tricontourf(params['tri'], np.abs(sol-sol_fem), levels = levels, cmap='jet', vmin=vmin, vmax=vmax)
+            ax.set_title('Absolute diff')
             fig.colorbar(im, ax=ax)
             ax.set_aspect('equal', adjustable='box')
             plt.tight_layout()

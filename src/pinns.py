@@ -523,15 +523,11 @@ class MSGPINNs:
                models_inuse = [True],
                weights = [(10.0, 1.0, 1.0)],
                maxits_adam = 1000,
-               maxits_lbfgs = 0,
                data_update_freq = 100,
                print_loss_freq = 100,
                lr_adam_init = 1e-03,
                lr_adam_stepsize = 1000,
                lr_adam_gamma = 1.0,
-               lr_lbfgs_init = -1.0,
-               lr_lbfgs_stepsize = 1000,
-               lr_lbfgs_gamma = 1.0,
                loss_history_file_base = None,
                save_figs = False,
                fig_file_base = None,
@@ -551,8 +547,6 @@ class MSGPINNs:
             Weight for each model in the order (bc, pde, sym) for boundary loss, PDE loss, and symmetric loss.
          maxits_adam: Integer. Default 1000.
             Maximum iterations for Adam optimizer.
-         maxits_lbfgs: Integer. Default 0.
-            Maximum iterations for LBFGS optimizer.
          data_update_freq: Integer. Default 100.
             Frequency of updating the dataset.
          print_loss_freq: Integer. Default 100.
@@ -562,12 +556,6 @@ class MSGPINNs:
          lr_adam_stepsize: Integer. Default 1000.
             Stepsize for the learning rate scheduler.
          lr_adam_gamma: Float. Default 1.0.
-            Gamma for the learning rate scheduler.
-         lr_lbfgs_init: Float. Default -1.0.
-            Initial learning rate for LBFGS optimizer. If -1.0, the last learning rate of Adam optimizer is used.
-         lr_lbfgs_stepsize: Integer. Default 1000.
-            Stepsize for the learning rate scheduler.
-         lr_lbfgs_gamma: Float. Default 1.0.
             Gamma for the learning rate scheduler.
          loss_history_file_base: String or None. Default None.
             File name for saving the loss history.
@@ -581,7 +569,7 @@ class MSGPINNs:
       MSGPINNs.lock_check(models_lock, models_inuse, self._nmodels)
       self._models_lock = models_lock
       self._models_inuse = models_inuse
-      loss_res, loss_its = MSGPINNs.load_loss(loss_history_file_base, self._ndomains, maxits_adam, maxits_lbfgs)
+      loss_res, loss_its = MSGPINNs.load_loss(loss_history_file_base, self._ndomains, maxits_adam)
 
       # main loop
       for domi in range(self._ndomains):
@@ -593,15 +581,11 @@ class MSGPINNs:
                         models_inuse = models_inuse,
                         weights = weights,
                         maxits_adam = maxits_adam,
-                        maxits_lbfgs = maxits_lbfgs,
                         data_update_freq = data_update_freq,
                         print_loss_freq = print_loss_freq,
                         lr_adam_init = lr_adam_init,
                         lr_adam_stepsize = lr_adam_stepsize,
                         lr_adam_gamma = lr_adam_gamma,
-                        lr_lbfgs_init = lr_lbfgs_init,
-                        lr_lbfgs_stepsize = lr_lbfgs_stepsize,
-                        lr_lbfgs_gamma = lr_lbfgs_gamma,
                         loss_history_file_base = loss_history_file_base,
                         save_figs = save_figs,
                         fig_file_base = fig_file_base,
@@ -618,15 +602,11 @@ class MSGPINNs:
                   models_inuse = [True],
                   weights = [(10.0, 1.0, 1.0)],
                   maxits_adam = 1000,
-                  maxits_lbfgs = 0,
                   data_update_freq = 100,
                   print_loss_freq = 100,
                   lr_adam_init = 1e-03,
                   lr_adam_stepsize = 1000,
                   lr_adam_gamma = 1.0,
-                  lr_lbfgs_init = -1.0,
-                  lr_lbfgs_stepsize = 1000,
-                  lr_lbfgs_gamma = 1.0,
                   loss_history_file_base = None,
                   save_figs = False,
                   fig_file_base = None,
@@ -636,7 +616,7 @@ class MSGPINNs:
                   y_sample = None
                ):
       '''
-      Train one subdomain. First train with Adam optimizer, then with LBFGS optimizer.
+      Train one subdomain. First train with Adam optimizer
       Inputs:
          domi: Integer.
             Domain number.
@@ -654,8 +634,6 @@ class MSGPINNs:
             Weight for each model in the order (bc, pde, sym) for boundary loss, PDE loss, and symmetric loss.
          maxits_adam: Integer. Default 1000.
             Maximum iterations for Adam optimizer.
-         maxits_lbfgs: Integer. Default 0.
-            Maximum iterations for LBFGS optimizer.
          data_update_freq: Integer. Default 100.
             Frequency of updating the dataset.
          print_loss_freq: Integer. Default 100.
@@ -665,12 +643,6 @@ class MSGPINNs:
          lr_adam_stepsize: Integer. Default 1000.
             Stepsize for the learning rate scheduler.
          lr_adam_gamma: Float. Default 1.0.
-            Gamma for the learning rate scheduler.
-         lr_lbfgs_init: Float. Default -1.0.
-            Initial learning rate for LBFGS optimizer. If -1.0, the last learning rate of Adam optimizer is used.
-         lr_lbfgs_stepsize: Integer. Default 1000.
-            Stepsize for the learning rate scheduler.
-         lr_lbfgs_gamma: Float. Default 1.0.
             Gamma for the learning rate scheduler.
          loss_history_file_base: String or None. Default None.
             File name for saving the loss history.
@@ -690,7 +662,7 @@ class MSGPINNs:
       self._models_lock = models_lock
       self._models_inuse = models_inuse
       if loss_res_i is None or loss_its_i is None:
-         loss_res, loss_its = MSGPINNs.load_loss(loss_history_file_base, self._ndomains, maxits_adam, maxits_lbfgs)
+         loss_res, loss_its = MSGPINNs.load_loss(loss_history_file_base, self._ndomains, maxits_adam)
          loss_res_i = loss_res[domi]
          loss_its_i = loss_its[domi]
       
@@ -764,47 +736,6 @@ class MSGPINNs:
          if not self._models_lock[i]:
             self._models[i][domi].save(self._models_state_files[i][domi])
       
-      # next the LBFGS training loop
-      optimizer = torch.optim.LBFGS(param_list, lr=lr_lbfgs_init if lr_lbfgs_init > 0 else scheduler.get_last_lr()[0])
-      scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 
-                                                   step_size=lr_lbfgs_stepsize, 
-                                                   gamma=lr_lbfgs_gamma)
-      loss = nn.MSELoss()
-      reset_seed(seed)
-      with tqdm(total=maxits_lbfgs, disable=disable_tqdm_bar) as pbar:
-         for i in range(maxits_lbfgs):
-            optimizer.zero_grad()
-            if i % data_update_freq == 0:
-               tqdm.write("Updating dataset")
-               x_bc, u_bc, x_far, x_near, y = self.sample_data(self._nsamples, 
-                                                               self._gdomain, 
-                                                               domi, 
-                                                               self._eps, 
-                                                               self._r_near,
-                                                               fix_y = fix_y,
-                                                               y_sample = y_sample)
-               x_interior = torch.cat([x_near, x_far], dim=0).detach().requires_grad_(True)
-            optimizer.zero_grad()
-            loss_items = np.zeros(3)
-            def closure(its, weights, print_mgs):
-               loss_total, loss_bc, loss_pde, loss_sym = self.get_loss(loss, domi, x_interior, x_bc, u_bc, weights)
-               if print_mgs:
-                  loss_items[0] = loss_bc.item()
-                  loss_items[1] = loss_pde.item()
-                  loss_items[2] = loss_sym.item()
-               loss_total.backward()
-               return loss_total
-            if i % print_loss_freq == 0 or i == maxits_lbfgs - 1:
-               loss_total = optimizer.step(lambda: closure(i, weights, True))
-               MSGPINNs.print_loss(i, loss_total.item(), loss_items[0], loss_items[1], loss_items[2], weights)
-            else:
-               loss_total = optimizer.step(lambda: closure(i, weights, False))
-            pbar.update(1)
-            loss_res_i[loss_its_i] = loss_total.item()
-            loss_its_i += 1
-
-      MSGPINNs.plot_and_save_loss(loss_res_i, loss_its_i, domi, loss_history_file_base, save_figs, fig_file_base)
-      
       for i in range(self._nmodels):
          if not self._models_lock[i]:
             self._models[i][domi].save(self._models_state_files[i][domi])
@@ -828,7 +759,7 @@ class MSGPINNs:
    def eval(self,
             x,
             domain_num = 0,
-            all_inuse = False):
+            all_inuse = True):
       '''
       Evaluate the solution at x.
       Inputs:
@@ -839,7 +770,7 @@ class MSGPINNs:
       '''
       u = None
       for modeli in range(self._nmodels):
-         if not all_inuse and not self._models_inuse[modeli]:
+         if not all_inuse and self._models_inuse[modeli]:
             continue
          if self._on_the_fly:
             self._models[modeli][domain_num] = GPINNs_Model(self._dim,
@@ -862,8 +793,6 @@ class MSGPINNs:
          else:
             self._models[modeli][domain_num].to(self._device)
             self._models[modeli][domain_num].eval()
-         print(self._models[modeli][domain_num])
-         print(u is None)
          if u is not None:
             u = u + self._models[modeli][domain_num](x)
          else:
@@ -1049,7 +978,7 @@ class MSGPINNs:
             weights[2] * loss_sym_item))
 
    @staticmethod
-   def load_loss(loss_history_file_base, ndomains, maxits_adam, maxits_lbfgs):
+   def load_loss(loss_history_file_base, ndomains, maxits_adam):
       loss_res = []
       loss_its = np.zeros(ndomains, dtype=np.int64)
       if loss_history_file_base is not None:
@@ -1057,17 +986,17 @@ class MSGPINNs:
             loss_history_file_i = MSGPINNs.loss_file_rule(loss_history_file_base, domi)
             if not os.path.exists(loss_history_file_i):
                loss_its[domi] = 0
-               loss_res.append(np.zeros(maxits_adam + maxits_lbfgs).astype(np.float64))
+               loss_res.append(np.zeros(maxits_adam).astype(np.float64))
             else:
                loss_data_i = np.load(loss_history_file_i)
                loss_its[domi] = loss_data_i['total_its']
                loss_res_i = loss_data_i['loss_history']
-               loss_res_i = np.concatenate((loss_res_i, np.zeros(maxits_adam + maxits_lbfgs).astype(np.float64)))
+               loss_res_i = np.concatenate((loss_res_i, np.zeros(maxits_adam).astype(np.float64)))
                loss_res.append(loss_res_i)
       else:
          for domi in range(ndomains):
             loss_its[domi] = 0
-            loss_res.append(np.zeros(maxits_adam + maxits_lbfgs).astype(np.float64))
+            loss_res.append(np.zeros(maxits_adam ).astype(np.float64))
       return loss_res, loss_its
 
    @staticmethod
