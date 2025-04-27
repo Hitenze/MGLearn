@@ -1,0 +1,29 @@
+name: mglearn
+channels:
+  - conda-forge
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly
+  - fenics
+  - meshio
+  - matplotlib
+  - numpy
+  - scipy
+  - plotly
+  - tqdm
+  - seaborn
+  - psutil
+  - ipykernel
+  - ipywidgets
+  - notebook
+  - pytest
+  - pytest-cov
+  - pip
+  - pip:
+    - fenics-ufl 
+    - meshpy
